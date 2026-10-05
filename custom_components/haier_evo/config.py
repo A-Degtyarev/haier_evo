@@ -223,6 +223,21 @@ class HaierWMConfig(HaierDeviceConfig):
         )
 
 
+class HaierWHConfig(HaierDeviceConfig):
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"current_temperature={self['current_temperature']!r},"
+            f"target_temperature={self['target_temperature']!r},"
+            f"status={self['status']!r},"
+            f"heating_mode={self['heating_mode']!r},"
+            f"heating_status={self['heating_status']!r},"
+            f"sterilization={self['sterilization']!r}"
+            f")"
+        )
+
+
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
@@ -263,6 +278,11 @@ class Attribute(dict):
             "Температура": "temperature",
             "Скорость отжима": "spin_speed",
             "Оставшееся время": "remaining_time",
+            # Водонагреватели:
+            "Текущая температура": "current_temperature",
+            "Режим нагрева": "heating_mode",
+            "Поддержка температуры/обогрев": "heating_status",
+            "Дезинфекция": "sterilization",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
@@ -440,6 +460,8 @@ class Item(dict):
             "fridge_mode": Temperature,
             "freezer_mode": Temperature,
             "my_zone": Temperature,
+            "heating_mode": HeatingMode,
+            "heating_status": HeatingStatus,
         }.get(name, cls)(data)
 
 
@@ -497,6 +519,21 @@ class EcoSensor(Item):
         "Обводящий": "outlining",
         "Сопутствующий": "related",
         "Активен": "on",
+    }
+
+
+class HeatingMode(Item):
+    mappings = {
+        "Не установлен": "none",
+        "Половинка": "eco",
+        "Вся емкость": "performance",
+    }
+
+
+class HeatingStatus(Item):
+    mappings = {
+        "В режиме сохранения тепла": "idle",
+        "Режим нагрева": "heating",
     }
 
 

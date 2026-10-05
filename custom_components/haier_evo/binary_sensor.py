@@ -1,5 +1,5 @@
 import weakref
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from . import api
@@ -76,3 +76,13 @@ class HaierREFSuperCoolingSensor(HaierREFBinarySensor):
         self._device_attr_name = "super_cooling"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_cooling"
         self._attr_name = f"{device.device_name} Супер-охлаждение"
+
+
+class HaierWHHeatingSensor(HaierBinarySensor):
+    _attr_device_class = BinarySensorDeviceClass.HEAT
+
+    def __init__(self, device: api.HaierWH) -> None:
+        super().__init__(device)
+        self._device_attr_name = "heating"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_heating"
+        self._attr_name = f"{device.device_name} Нагрев"

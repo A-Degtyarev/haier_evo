@@ -781,6 +781,10 @@ class HaierDevice(object):
         return []
 
     # noinspection PyMethodMayBeStatic
+    def create_entities_water_heater(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
     def create_entities_switch(self) -> list:
         return []
 
@@ -809,6 +813,7 @@ class HaierDevice(object):
             "AC": HaierAC,
             "REF": HaierREF,
             "WM": HaierWM,
+            "WH": HaierWH,
         }.get(device_type, cls)
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
@@ -1437,6 +1442,129 @@ class HaierWM(HaierDevice):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
         if self.config['status'] is not None:
             entities.append(sensor.HaierWMStatusSensor(self))
+        return entities
+
+
+class HaierWH(HaierDevice):
+
+    def __init__(
+        self,
+        backend_data: dict = None,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.current_temperature = None
+        self.target_temperature = None
+        self.min_temperature = 35
+        self.max_temperature = 75
+        self.status = False
+        self.heating_mode = None
+        self.heating = False
+        self.sterilization_on = False
+        self._get_status(backend_data)
+
+    @property
+    def config(self) -> CFG.HaierWHConfig:
+        return self._config
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+        data.update({
+            "current_temperature": self.current_temperature,
+            "target_temperature": self.target_temperature,
+            "min_temperature": self.min_temperature,
+            "max_temperature": self.max_temperature,
+            "status": self.status,
+            "heating_mode": self.heating_mode,
+            "heating": self.heating,
+            "sterilization_on": self.sterilization_on,
+        })
+        return data
+
+    def _load_config_from_attributes(self, data: dict) -> None:
+        self._config = CFG.HaierWHConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        attributes = data.setdefault("attributes", [])
+        attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
+        for attr in attrs:
+            self.config.attrs.append(attr)
+        self.config.merge_attributes()
+        for attr in self.config.attrs:
+            self._set_attribute_value(str(attr.code), attr.current)
+            if attr.name == "target_temperature" and attr.range:
+                self.min_temperature = float(attr.range.min_value)
+                self.max_temperature = float(attr.range.max_value)
+            _LOGGER.debug(f"{self.device_name}: {attr}")
+        self.constraint.extend(data.setdefault("constraint", []))
+
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        attr = self.config.get_attr_by_code(code)
+        if not (attr and value is not None):
+            return
+        elif attr.name == "current_temperature":
+            self.current_temperature = float(value)
+        elif attr.name == "target_temperature":
+            self.target_temperature = float(value)
+        elif attr.name == "status":
+            self.status = parsebool(attr.get_item_name(str(value)))
+        elif attr.name == "heating_mode":
+            self.heating_mode = attr.get_item_name(str(value))
+        elif attr.name == "heating_status":
+            self.heating = attr.get_item_name(str(value)) == "heating"
+        elif attr.name == "sterilization":
+            self.sterilization_on = parsebool(attr.get_item_name(str(value)))
+
+    def get_heating_modes(self) -> list[str]:
+        return [m for m in self.config.get_values("heating_mode") if m != "none"]
+
+    def set_temperature(self, value: float) -> None:
+        self._send_commands([
+            {
+                "commandName": self.config['target_temperature'],
+                "value": str(int(value))
+            }
+        ])
+        self.target_temperature = float(int(value))
+
+    def switch_on(self, mode: str = None) -> None:
+        commands = self.get_commands("status", "on") if not self.status else []
+        if mode and mode != self.heating_mode:
+            commands += self.get_commands("heating_mode", mode)
+            self.heating_mode = mode
+        self._send_commands(commands)
+        self.status = True
+
+    def switch_off(self) -> None:
+        self._send_commands(self.get_commands("status", "off"))
+        self.status = False
+
+    def set_sterilization_on(self, value: bool) -> None:
+        if commands := self.get_commands("sterilization", value):
+            self._send_commands(commands)
+            self.sterilization_on = value
+
+    def create_entities_water_heater(self) -> list:
+        from . import water_heater
+        return [water_heater.HaierWHEntity(self)]
+
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['sterilization'] is not None:
+            entities.append(switch.HaierWHSterilizationSwitch(self))
+        return entities
+
+    def create_entities_sensor(self) -> list:
+        from . import sensor
+        entities = []
+        if self.config['current_temperature'] is not None:
+            entities.append(sensor.HaierWHTemperatureSensor(self))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = []
+        if self.config['heating_status'] is not None:
+            entities.append(binary_sensor.HaierWHHeatingSensor(self))
         return entities
 
 
