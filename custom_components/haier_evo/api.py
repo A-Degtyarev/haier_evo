@@ -1507,7 +1507,9 @@ class HaierWH(HaierDevice):
         elif attr.name == "status":
             self.status = parsebool(attr.get_item_name(str(value)))
         elif attr.name == "heating_mode":
-            self.heating_mode = attr.get_item_name(str(value))
+            # during sterilization the device reports "none" and restores the mode afterwards
+            if (mode := attr.get_item_name(str(value))) != "none":
+                self.heating_mode = mode
         elif attr.name == "heating_status":
             self.heating = attr.get_item_name(str(value)) == "heating"
         elif attr.name == "sterilization":
